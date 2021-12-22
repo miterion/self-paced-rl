@@ -386,10 +386,11 @@ if __name__ == "__main__":
     parser.add_argument("--algorithm", type=str, nargs="?", default="sprl", choices=["sprl", "cmaes", "creps",
                                                                                      "saggriac", "goalgan"],
                         help="The algorithm with which to run the experiment")
+    parser.add_argument("--svgd_sampler_type", type=str, nargs="?", default="simple", choices=["simple", "prune_old"],)
 
     args = parser.parse_args()
 
-    environment = environments.get(args.environment, cores=args.n_cores)
+    environment = environments.get(args.environment, cores=args.n_cores, svgd_type=args.svgd_sampler_type)
     if args.setting != "":
         environment.set_setting(args.setting)
 

@@ -112,9 +112,16 @@ class SVGDJoint(KLJoint):
                  sigma_y,
                  feature_func,
                  epsilon,
-                 max_eta=100):
-        self.distribution = SVGDPruningKLGaussian(lower_bounds_x,
+                 max_eta=100,
+                 svgd_type=None):
+
+        print(f"Using sampler type: {svgd_type}")
+        if svgd_type == 'prune_old':
+            self.distribution = SVGDPruningKLGaussian(lower_bounds_x,
                                                   upper_bounds_x, mu_x,
+                                                  sigma_x)
+        else:
+            self.distribution = SVGDKLGaussian(lower_bounds_x,upper_bounds_x, mu_x,
                                                   sigma_x)
         self.policy = KLPolicy(lower_bounds_y, upper_bounds_y, mu_y, sigma_y,
                                feature_func)

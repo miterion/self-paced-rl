@@ -1,7 +1,7 @@
 from sprl.envs.gate import Gate
 
 
-def get(name, cores=1):
+def get(name, cores=1, svgd_type=None):
     if name == "gate":
         return Gate(name, cores)
     elif name == "reacher-obstacle":
@@ -15,7 +15,7 @@ def get(name, cores=1):
     elif name == "point-mass":
         # We do this to avoid requiring mujoco-py if the point maze environment is not used
         from sprl.envs.point_mass import PointMass
-        return PointMass(name, cores)
+        return PointMass(name, cores, svgd_type)
 
     else:
         raise RuntimeError("Unknown environment '" + str(name) + "'")

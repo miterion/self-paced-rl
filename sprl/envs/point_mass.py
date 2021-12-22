@@ -78,7 +78,7 @@ class PointMassCostFunction:
 
 class PointMass(AbstractEnvironment):
 
-    def __init__(self, name, n_cores):
+    def __init__(self, name, n_cores, svgd_type=None):
         context_lower_bounds = np.array([-1.5, -1.5])
         context_upper_bounds = np.array([1.5, 1.5])
 
@@ -92,6 +92,7 @@ class PointMass(AbstractEnvironment):
         policy_lower_bounds = np.ones(theta_dim) * -10
         policy_upper_bounds = np.ones(theta_dim) * 10
 
+
         s1 = ExperimentSpec(n_iter=250,
                             init_dist=SVGDJoint(copy.deepcopy(context_lower_bounds),
                                               copy.deepcopy(context_upper_bounds),
@@ -101,7 +102,7 @@ class PointMass(AbstractEnvironment):
                                               policy_upper_bounds,
                                               copy.deepcopy(mean), copy.deepcopy(cov),
                                               PolynomialFeatures(order=1, bias=True),
-                                              epsilon=0.5, max_eta=10.),
+                                              epsilon=0.5, max_eta=10., svgd_type=svgd_type),
                             target_dist=Gaussian(context_lower_bounds, context_upper_bounds,
                                                  np.array([1.3, -1.3]), np.diag([1e-2, 1e-2])),
                             value_features=RadialBasisFunctions((5, 5),
