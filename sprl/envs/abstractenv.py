@@ -26,6 +26,8 @@ def worker(remote, parent_remote, cost_fn_constructor, pid):
                 raise RuntimeError("Unexpected mode '" + str(mode) + "'")
     except KeyboardInterrupt:
         print('SubprocVecEnv worker: got KeyboardInterrupt')
+    except Exception as e:
+        print(e)
 
 
 class AbstractEnvironment:

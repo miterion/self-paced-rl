@@ -1,3 +1,4 @@
+from sprl.distributions.svgd import SVGDJoint
 from sprl.envs.abstractenv import AbstractEnvironment
 from sprl.envs.spec import ExperimentSpec
 from sprl.util.schedule import PercentageSchedule
@@ -92,7 +93,7 @@ class PointMass(AbstractEnvironment):
         policy_upper_bounds = np.ones(theta_dim) * 10
 
         s1 = ExperimentSpec(n_iter=250,
-                            init_dist=KLJoint(copy.deepcopy(context_lower_bounds),
+                            init_dist=SVGDJoint(copy.deepcopy(context_lower_bounds),
                                               copy.deepcopy(context_upper_bounds),
                                               copy.deepcopy(context_mean),
                                               copy.deepcopy(np.diag(np.square(context_width))),
