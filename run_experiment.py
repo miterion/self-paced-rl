@@ -386,7 +386,7 @@ if __name__ == "__main__":
     parser.add_argument("--algorithm", type=str, nargs="?", default="sprl", choices=["sprl", "cmaes", "creps",
                                                                                      "saggriac", "goalgan"],
                         help="The algorithm with which to run the experiment")
-    parser.add_argument("--svgd_sampler_type", type=str, nargs="?", default="simple", choices=["simple", "prune_old"],)
+    parser.add_argument("--svgd_sampler_type", type=str, nargs="?", default="simple", choices=["without", "simple", "prune_old"],)
 
     args = parser.parse_args()
 

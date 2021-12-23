@@ -120,9 +120,12 @@ class SVGDJoint(KLJoint):
             self.distribution = SVGDPruningKLGaussian(lower_bounds_x,
                                                   upper_bounds_x, mu_x,
                                                   sigma_x)
-        else:
+        elif svgd_type == 'simple':
             self.distribution = SVGDKLGaussian(lower_bounds_x,upper_bounds_x, mu_x,
                                                   sigma_x)
+        else:
+            self.distribution = KLGaussian(
+                lower_bounds_x, upper_bounds_x, mu_x, sigma_x)
         self.policy = KLPolicy(lower_bounds_y, upper_bounds_y, mu_y, sigma_y,
                                feature_func)
 
