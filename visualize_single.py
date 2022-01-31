@@ -45,7 +45,7 @@ def main():
     rs = compute_rewards_and_successes(env, policies)
     rs["distributions"] = distributions
 
-    fig, ax = plt.subplots(2, 1)
+    _, ax = plt.subplots(2, 1)
 
     visualize_perf_or_suc([rs["idx"]], [rs["successes"]], ["SPRL-SVGD"], False,
                           FONTSIZE, ["C0"], ax[0])

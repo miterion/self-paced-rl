@@ -3,7 +3,7 @@ from sprl.envs.gate import Gate
 
 def get(name, cores=1, svgd_type=None):
     if name == "gate":
-        return Gate(name, cores)
+        return Gate(name, cores, svgd_type=svgd_type)
     elif name == "reacher-obstacle":
         # We do this to avoid requiring mujoco-py if the reacher environments are not used
         from sprl.envs.reach_avoid import ReachAvoid
