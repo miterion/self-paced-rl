@@ -17,8 +17,6 @@ class SteinPointsGaussian(KLGaussian):
             kernel=rbf_kernel_mahalanobis, verbose=False)
         self._kernel_args = dict(bandwidth=1.)
         self._return_last = False
-        self._old_sample_ratio = 0.5
-
 
     def sample(self, num_samples=1, aux_samples=-1):
         if self._samples is None:
@@ -29,28 +27,21 @@ class SteinPointsGaussian(KLGaussian):
             self._return_last = False
             return self._samples
         else:
-            dis = multivariate_normal(self.mu, self.sigma)
-            _, self._samples = self._sampler.sample(
-                dis,
-                self._samples,
-                num_samples,
-                self._samples.shape[0],
-                old_sample_ratio=self._old_sample_ratio,
-                return_splitted=True,
-                kernel_args=self._kernel_args)
-            return self._samples
+            raise NotImplementedError('Called sample without setting return last or clearing sample buffer')
 
     def set_buffer_values(self, values: np.ndarray):
         self._samples = values
 
     def prepare_buffer_with_preselected_values(self, values: np.ndarray, num_samples: int, old_sample_ratio: float) -> Tuple[np.ndarray, int]:
-        dis = multivariate_normal(self.mu, self.sigma)
-        self._kernel_args["cov"] = np.linalg.inv(self.sigma)
+        U, S, V = np.linalg.svd(self.sigma)
+        sigma_stretched = U * (S * 2) @ V
+        dis = multivariate_normal(self.mu, sigma_stretched)
+        self._kernel_args["cov"] = np.linalg.inv(sigma_stretched)
         old_sample_selection, aux = self._sampler.sample(
             dis,
             values,
             num_samples,
-            values.shape[0] * 2,
+            values.shape[0] * 0.3,
             return_splitted=True,
             old_sample_ratio=old_sample_ratio,
             kernel_args=self._kernel_args)
