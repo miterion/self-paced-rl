@@ -14,7 +14,7 @@ class SteinPointsGaussian(KLGaussian):
         super().__init__(lower_bounds, upper_bounds, mu, sigma)
         self._samples = None
         self._sampler = OptimizationSteinPointsSampler(
-            kernel=rbf_kernel_mahalanobis, verbose=True)
+            kernel=rbf_kernel_mahalanobis, verbose=False)
         self._kernel_args = dict(bandwidth=1.)
         self._return_last = False
         self._old_sample_ratio = 0.5
