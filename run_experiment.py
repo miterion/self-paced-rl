@@ -8,6 +8,8 @@ from functools import partial
 
 import cma
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore',category=FutureWarning)
 import tensorflow as tf
 from mpi4py import MPI
 from scipy.stats import multivariate_normal
