@@ -1,89 +1,76 @@
+from typing import Tuple
 import numpy as np
-from adaptive_baselines.samplers.svgd import BandwidthHeuristic, OptimizationSVGDSampler, VanillaSVGDSampler
+from adaptive_baselines.samplers.svgd import OptimizationSVGDSampler
+from adaptive_baselines.samplers.steinpoints import OptimizationSteinPointsSampler, SteinPointsSampler
+from adaptive_baselines.samplers.kernels import rbf_kernel, rbf_kernel_mahalanobis
 from scipy.stats import multivariate_normal
 from sprl.distributions.kl_joint import KLGaussian, KLJoint, KLPolicy
+from functools import partial
 
 
-class SVGDKLGaussian(KLGaussian):
+class SteinPointsGaussian(KLGaussian):
 
     def __init__(self, lower_bounds, upper_bounds, mu, sigma):
         super().__init__(lower_bounds, upper_bounds, mu, sigma)
         self._samples = None
-        self._counter = 0
-        self._keep_old_samples = False
-        self._sampler = VanillaSVGDSampler(BandwidthHeuristic.HEMETHOD,
-                                           stepsize=1e-1)
-        
+        self._sampler = OptimizationSteinPointsSampler(
+            kernel=rbf_kernel_mahalanobis, verbose=True)
+        self._kernel_args = dict(bandwidth=1.)
+        self._return_last = False
+        self._old_sample_ratio = 0.5
 
-    def sample(self, num_samples=1, mask=None):
+
+    def sample(self, num_samples=1, aux_samples=-1):
         if self._samples is None:
             print("Complete resample")
             return np.array(super().sample(num_samples))
 
+        elif self._return_last:
+            self._return_last = False
+            return self._samples
         else:
             dis = multivariate_normal(self.mu, self.sigma)
-            if num_samples > self._samples.shape[0]:
-                self._samples = np.concatenate(
-                    (self._samples,
-                     dis.rvs(num_samples - self._samples.shape[0])))
-            elif self._keep_old_samples:
-                self._samples = np.concatenate(
-                    (self._samples, dis.rvs(num_samples)))
-                print(f"Keeping old samples, but adding {num_samples} new ones.")
-                mask = np.full((self._samples.shape[0]), False)
-                mask[-num_samples:] = True
-            elif num_samples < self._samples.shape[0]:
-                raise RuntimeError(
-                    "SVGDKLGaussian: num_samples must (currently) be greater than the number of samples already stored"
-                )
-            if mask is not None:
-                print(f"SVGDKLGaussian: Using mask")
-                # self._samples = OptimizationSVGDSampler(8).sample_with_mask(
-                #     dis,
-                #     self._samples,
-                #     bounds=(self.lower_bounds, self.upper_bounds),
-                #     mask=mask)[mask]
-                self._samples = self._sampler.sample_with_mask(dis,
-                                                    self._samples,
-                                                    n_iter=100,
-                                                    bounds=(self.lower_bounds,
-                                                            self.upper_bounds),
-                                                    mask=mask)[1][mask]
-            else:
-                print(f"SVGDKLGaussian: NOT using mask")
-                self._samples = OptimizationSVGDSampler(8).sample_with_bounds(
-                    dis,
-                    self._samples,
-                    bounds=(self.lower_bounds, self.upper_bounds))
-        self._counter += 1
-        return self._samples
-
-    @property
-    def mu(self):
-        return self._mu
-
-    @mu.setter
-    def mu(self, value):
-        self._mu = value
-        self._distribution_shift = True
-
-    @property
-    def sigma(self):
-        return self._sigma
-
-    @sigma.setter
-    def sigma(self, value):
-        self._sigma = value
-        self._distribution_shift = True
+            _, self._samples = self._sampler.sample(
+                dis,
+                self._samples,
+                num_samples,
+                self._samples.shape[0],
+                old_sample_ratio=self._old_sample_ratio,
+                return_splitted=True,
+                kernel_args=self._kernel_args)
+            return self._samples
 
     def set_buffer_values(self, values: np.ndarray):
         self._samples = values
-        self._keep_old_samples = True
+
+    def prepare_buffer_with_preselected_values(self, values: np.ndarray, num_samples: int, old_sample_ratio: float) -> Tuple[np.ndarray, int]:
+        dis = multivariate_normal(self.mu, self.sigma)
+        self._kernel_args["cov"] = np.linalg.inv(self.sigma)
+        old_sample_selection, aux = self._sampler.sample(
+            dis,
+            values,
+            num_samples,
+            values.shape[0] * 2,
+            return_splitted=True,
+            old_sample_ratio=old_sample_ratio,
+            kernel_args=self._kernel_args)
+        self._samples = aux.copy()
+        return old_sample_selection, aux.shape[0]
 
     def clear_sample_buffer(self):
         self._samples = None
-        self._keep_old_samples = False
 
+    def __getstate__(self):
+        # For some reason, the sampler is not pickleable,
+        # so we need to remove it.
+        state = self.__dict__.copy()
+        del state['_sampler']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._sampler = OptimizationSteinPointsSampler(
+            kernel=rbf_kernel_mahalanobis, verbose=True)
 
 class SVGDKLPolicy(KLPolicy):
     def __init__(self, lower_bounds, upper_bounds, mu_init, sigma_init,
@@ -152,7 +139,7 @@ class SVGDJoint(KLJoint):
                                                       upper_bounds_x, mu_x,
                                                       sigma_x)
         elif svgd_type == 'simple':
-            self.distribution = SVGDKLGaussian(lower_bounds_x, upper_bounds_x,
+            self.distribution = SteinPointsGaussian(lower_bounds_x, upper_bounds_x,
                                                mu_x, sigma_x)
         else:
             self.distribution = KLGaussian(lower_bounds_x, upper_bounds_x,
@@ -164,7 +151,7 @@ class SVGDJoint(KLJoint):
         self.max_eta = max_eta
 
 
-class SVGDPruningKLGaussian(SVGDKLGaussian):
+class SVGDPruningKLGaussian(SteinPointsGaussian):
     def __init__(self, lower_bounds, upper_bounds, mu, sigma, prune_amount=10):
         super().__init__(lower_bounds, upper_bounds, mu, sigma)
         self._prune_amount = prune_amount

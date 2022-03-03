@@ -64,3 +64,7 @@ class SVGD_ExperienceBuffer2(ExperienceBuffer):
 
     def get_specific(self, i: int):
         return self.elements[i]
+
+    @property
+    def current_size(self) -> int:
+        return self.elements[0].shape[0]

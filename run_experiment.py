@@ -227,39 +227,19 @@ def sprl_svgd_iteration_function(env, spec, policies, average_rewards,
                                  seed, iteration):
     policies.append(copy.deepcopy(distribution))
 
-    buffer_values = buffer.get()
-    contexts = buffer_values[0]
-
-    # remove 100 samples with lowest probability
-    # moments = distribution.distribution.get_moments()
-    # dist = multivariate_normal(moments[0], moments[1])
-    # probs = dist.pdf(contexts)
-    # highest_prob_samples = np.argpartition(probs, 100)[100:]
-    # buffer.keep_specific_indices(highest_prob_samples)
-    
-    # remove 100 random samples
-    # random_kept_samples = np.random.choice(contexts.shape[0], contexts.shape[0] - 100, replace=False)
-    # buffer.keep_specific_indices(random_kept_samples)
-
-    # remove 100 oldest samples
-    # kept_samples = np.arange(contexts.shape[0])[100:]
-    # buffer.keep_specific_indices(kept_samples)
-
-    # sample, match, remove closest, svgd on rest
-    distribution.distribution.clear_sample_buffer()
-    new_samples = distribution.distribution.sample(num_samples=contexts.shape[0] - 100)
-    # distribution.distribution.set_buffer_values(new_samples)
-    #shifted_samples = distribution.distribution.sample(
-    #    num_samples=new_samples.shape[0])
-    shifted_samples = new_samples
-    assignment = np.sum(find_assignment(contexts, shifted_samples), axis=1)
-    buffer.keep_specific_indices(np.where(assignment))
-
     contexts = buffer.get_specific(0)
-    distribution.distribution.set_buffer_values(contexts)
+    t1 = time.time()
+    old_selected, sample_count = distribution.distribution.prepare_buffer_with_preselected_values(
+        contexts, buffer.current_size, old_sample_ratio=0.888)
+    t2 = time.time()
+    print(f"Preparing buffer took {t2-t1} seconds.")
+    buffer.keep_specific_indices(old_selected)
+    np.savez(f"/tmp/{iteration}.npy", samples=buffer.get_specific(0), mu=distribution.distribution.mu, sigma=distribution.distribution.sigma)
+    distribution.distribution._return_last = True
+    print(f"Used a total of {sample_count} new samples")
 
     contexts, thetas, rewards, successes = env.sample_rewards(
-        spec.n_samples, distribution.policy, distribution.distribution)
+        sample_count, distribution.policy, distribution.distribution)
     buffer.insert(contexts, thetas, rewards, successes)
 
     buffered_contexts, buffered_thetas, buffered_rewards, buffered_successes = buffer.get(
