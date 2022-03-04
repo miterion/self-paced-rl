@@ -41,7 +41,7 @@ class SteinPointsGaussian(KLGaussian):
             dis,
             values,
             num_samples,
-            values.shape[0] * 0.3,
+            int(values.shape[0] * 0.3),
             return_splitted=True,
             old_sample_ratio=old_sample_ratio,
             kernel_args=self._kernel_args)
