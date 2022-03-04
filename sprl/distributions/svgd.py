@@ -35,13 +35,15 @@ class SteinPointsGaussian(KLGaussian):
     def prepare_buffer_with_preselected_values(self, values: np.ndarray, num_samples: int, old_sample_ratio: float) -> Tuple[np.ndarray, int]:
         U, S, V = np.linalg.svd(self.sigma)
         sigma_stretched = U * (S * 2) @ V
-        dis = multivariate_normal(self.mu, sigma_stretched)
+        dis = multivariate_normal(self.mu, self.sigma)
+        proposal = multivariate_normal(self.mu, sigma_stretched)
+        aux_samples = proposal.rvs(int(values.shape[0] * 0.3))
         self._kernel_args["cov"] = np.linalg.inv(sigma_stretched)
         old_sample_selection, aux = self._sampler.sample(
-            dis,
-            values,
-            num_samples,
-            int(values.shape[0] * 0.3),
+            new=dis,
+            old_samples=values,
+            n_samples=num_samples,
+            aux_samples=aux_samples,
             return_splitted=True,
             old_sample_ratio=old_sample_ratio,
             kernel_args=self._kernel_args)
