@@ -236,7 +236,6 @@ def sprl_svgd_iteration_function(env, spec, policies, average_rewards,
     t2 = time.time()
     print(f"Preparing buffer took {t2-t1} seconds.")
     buffer.keep_specific_indices(old_selected)
-    np.savez(f"/tmp/{iteration}.npy", samples=buffer.get_specific(0), mu=distribution.distribution.mu, sigma=distribution.distribution.sigma)
     distribution.distribution._return_last = True
     print(f"Used a total of {sample_count} new samples")
 
