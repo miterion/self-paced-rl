@@ -9,7 +9,9 @@ from sprl.distributions.kl_joint import KLJoint
 from sprl.policies.kl_wlr import KLWLRPolicy
 import numpy as np
 import copy
+import logging
 
+log = logging.getLogger(__name__)
 
 class GateCostFunction:
     def __init__(self, pid):
@@ -23,7 +25,7 @@ class GateCostFunction:
                                            5e-2).astype(np.float)
 
     def set_seed(self, seed):
-        print("Process " + str(self.pid) + " - Setting seed " + str(seed))
+        log.info("Process " + str(self.pid) + " - Setting seed " + str(seed))
         np.random.seed(seed)
 
     @staticmethod

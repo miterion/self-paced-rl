@@ -1,0 +1,6 @@
+type: sprl-svgd
+sampler_type: simple
+sampler:
+  old_sample_ratio: 0.5
+  proposal_stretch_factor: 1.5
+  aux_samples_factor: 0.9

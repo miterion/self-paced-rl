@@ -5,14 +5,18 @@ import os
 import pickle
 import time
 from functools import partial
+import logging
 
 import cma
 import numpy as np
 import warnings
-warnings.filterwarnings('ignore',category=FutureWarning)
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 import tensorflow as tf
 from mpi4py import MPI
 from scipy.stats import multivariate_normal
+import hydra
+from omegaconf import DictConfig
 
 import sprl.environments as environments
 from sprl.algorithms.creps import CREPS
@@ -24,7 +28,8 @@ from sprl.util.experiencebuffer import (ExperienceBuffer,
                                         SVGD_ExperienceBuffer,
                                         SVGD_ExperienceBuffer2)
 from sprl.util.visualization import Visualization
-from adaptive_baselines.samplers.util import find_assignment
+
+log = logging.getLogger(__name__)
 
 
 def creps_iteration_function(env, spec, policies, average_rewards,
@@ -80,11 +85,11 @@ def sprl_iteration_function(env, spec, policies, average_rewards,
         var = np.diag(distribution.distribution.sigma)
         clipped_var = np.maximum(var, spec.lower_variance_bound)
         if np.any(clipped_var - var > 0.):
-            print("Clipping Sigma to a minimum value")
+            log.debug("Clipping Sigma to a minimum value")
         distribution.distribution.sigma[np.diag_indices_from(
             distribution.distribution.sigma)] = clipped_var
 
-    print(
+    log.info(
         "Seed: %d, Iteration: %3d, KL-Div: %.3E, Reward: %4.2f, Success Rate: %1.2f"
         % (seed, iteration + 1, kl_div, average_rewards[-1],
            average_successes[-1]))
@@ -111,8 +116,8 @@ def sagg_riac_iteration_function(env, spec, policies, average_rewards,
     average_rewards.append(np.mean(buffered_rewards))
     average_successes.append(np.mean(buffered_successes))
 
-    print("Seed: %d, Iteration: %3d, Reward: %4.2f, Success Rate: %1.2f" %
-          (seed, iteration + 1, average_rewards[-1], average_successes[-1]))
+    log.info("Seed: %d, Iteration: %3d, Reward: %4.2f, Success Rate: %1.2f" %
+             (seed, iteration + 1, average_rewards[-1], average_successes[-1]))
 
     alg._feature_mean = np.mean(spec.value_features(buffered_contexts), axis=0)
     weights = alg.reweight_samples(buffered_contexts, buffered_rewards,
@@ -145,8 +150,8 @@ def goal_gan_iteration_function(env, spec, policies, average_rewards,
     average_rewards.append(np.mean(buffered_rewards))
     average_successes.append(np.mean(buffered_successes))
 
-    print("Seed: %d, Iteration: %3d, Reward: %4.2f, Success Rate: %1.2f" %
-          (seed, iteration + 1, average_rewards[-1], average_successes[-1]))
+    log.info("Seed: %d, Iteration: %3d, Reward: %4.2f, Success Rate: %1.2f" %
+             (seed, iteration + 1, average_rewards[-1], average_successes[-1]))
 
     alg._feature_mean = np.mean(spec.value_features(buffered_contexts), axis=0)
     weights = alg.reweight_samples(buffered_contexts, buffered_rewards,
@@ -156,13 +161,13 @@ def goal_gan_iteration_function(env, spec, policies, average_rewards,
     gan_contexts, gan_labels = gan_buffer.get()
     if iteration % spec.goal_gan_spec.gan_train_interval == 0:
         if np.mean(gan_labels) == 0.:
-            print(
+            log.info(
                 "Skipping GAN training, as no successful examples are present")
         else:
             gan.train(gan_contexts, gan_labels,
                       spec.goal_gan_spec.gan_train_iters)
     else:
-        print("Skipping GAN training")
+        log.info("Skipping GAN training")
 
     return weights, buffered_contexts, buffered_thetas, buffered_rewards
 
@@ -211,9 +216,9 @@ def gan_policy_rollout(gan, policy, env, spec, success_buffer, lb, ub,
 
         success_rates = success_rates_tmp / divisors
     except Exception as e:
-        print(successes)
-        print(success_rates)
-        print(divisors)
+        log.info(successes)
+        log.info(success_rates)
+        log.info(divisors)
 
         raise e
 
@@ -226,18 +231,22 @@ def gan_policy_rollout(gan, policy, env, spec, success_buffer, lb, ub,
 
 def sprl_svgd_iteration_function(env, spec, policies, average_rewards,
                                  average_successes, alg, distribution, buffer,
-                                 seed, iteration):
+                                 seed, cfg, iteration,):
     policies.append(copy.deepcopy(distribution))
 
     contexts = buffer.get_specific(0)
     t1 = time.time()
     old_selected, sample_count = distribution.distribution.prepare_buffer_with_preselected_values(
-        contexts, buffer.current_size, old_sample_ratio=0.888)
+        contexts,
+        buffer.current_size,
+        old_sample_ratio=cfg.algorithm.sampler.old_sample_ratio,
+        stretch_factor=cfg.algorithm.sampler.proposal_stretch_factor,
+        aux_samples_factor=cfg.algorithm.sampler.aux_samples_factor)
     t2 = time.time()
-    print(f"Preparing buffer took {t2-t1} seconds.")
+    log.debug(f"Preparing buffer took {t2-t1} seconds.")
     buffer.keep_specific_indices(old_selected)
     distribution.distribution._return_last = True
-    print(f"Used a total of {sample_count} new samples")
+    log.info(f"Used a total of {sample_count} new samples")
 
     contexts, thetas, rewards, successes = env.sample_rewards(
         sample_count, distribution.policy, distribution.distribution)
@@ -262,14 +271,14 @@ def sprl_svgd_iteration_function(env, spec, policies, average_rewards,
                        x_weights=context_weights)
     if spec.kl_div_thresh is not None and kl_div > spec.kl_div_thresh:
         var = np.diag(distribution.distribution.sigma)
-        print(f"Current variance is {var}")
+        log.debug(f"Current variance is {var}")
         clipped_var = np.maximum(var, spec.lower_variance_bound)
         if np.any(clipped_var - var > 0.):
-            print("Clipping Sigma to a minimum value")
+            log.debug("Clipping Sigma to a minimum value")
         distribution.distribution.sigma[np.diag_indices_from(
             distribution.distribution.sigma)] = clipped_var
 
-    print(
+    log.info(
         "Seed: %d, Iteration: %3d, KL-Div: %.3E, Reward: %4.2f, Success Rate: %1.2f"
         % (seed, iteration + 1, kl_div, average_rewards[-1],
            average_successes[-1]))
@@ -277,8 +286,8 @@ def sprl_svgd_iteration_function(env, spec, policies, average_rewards,
     return weights, buffered_contexts, buffered_thetas, buffered_rewards
 
 
-def run_experiment(env, seed, visualize, algorithm):
-    print("Running experiment " + str(seed + 1))
+def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
+    log.info("Running experiment " + str(seed + 1))
     np.random.seed(seed)
     env.set_seed(seed)
 
@@ -324,8 +333,9 @@ def run_experiment(env, seed, visualize, algorithm):
             successes.append(np.mean(s))
             theta_history.append(np.array(thetas))
 
-            print("Seed: %d, Count: %d, Reward: %4.2f, Success Rate: %1.2f" %
-                  (seed, count, np.mean(r), np.mean(s)))
+            log.debug(
+                "Seed: %d, Count: %d, Reward: %4.2f, Success Rate: %1.2f" %
+                (seed, count, np.mean(r), np.mean(s)))
 
             alg.tell(thetas, list(-r))
             alg.disp()
@@ -480,7 +490,7 @@ def run_experiment(env, seed, visualize, algorithm):
             elif algorithm == "sprl-svgd":
                 it_fn = partial(sprl_svgd_iteration_function, env, spec,
                                 policies, average_rewards, average_successes,
-                                alg, itl_distribution, buffer, seed)
+                                alg, itl_distribution, buffer, seed, cfg)
             else:
                 it_fn = partial(sprl_iteration_function, env, spec, policies,
                                 average_rewards, average_successes, alg,
@@ -499,7 +509,7 @@ def run_experiment(env, seed, visualize, algorithm):
         t_end = time.time()
 
         __, __, rewards, successes = env.sample_rewards(spec.n_samples, policy)
-        print(
+        log.info(
             "Seed: %d, Final Reward: %4.2f, Final Success Rate: %1.2f, Training Time: %.2E"
             % (seed, np.mean(rewards), np.mean(successes), t_end - t_start))
 
@@ -513,123 +523,52 @@ def run_experiment(env, seed, visualize, algorithm):
     return log_data
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Run experiments with with Self-Paced learning for C-REPS")
-    parser.add_argument(
-        "--environment",
-        type=str,
-        nargs="?",
-        default="gate",
-        choices=["gate", "reacher-obstacle", "ball-in-a-cup", "point-mass"],
-        help=
-        'The environment for the experiment - the reacher experiments require a MuJoCo license'
-    )
-    parser.add_argument(
-        "--setting",
-        type=str,
-        default="",
-        help=
-        "The specific experiment setting - currently only 'precision' and 'global' are supported"
-        " for the 'gate' environment")
-    parser.add_argument("--n_experiments",
-                        type=int,
-                        nargs="?",
-                        default=40,
-                        help="The number of experiments to be run")
-    parser.add_argument(
-        "--n_cores",
-        type=int,
-        nargs="?",
-        default=1,
-        help=
-        "The number of cores per MPI process that will be used to compute the experiments"
-    )
-    parser.add_argument(
-        "--n_mpi",
-        type=int,
-        nargs="?",
-        default=1,
-        help=
-        "The number of independent MPI processes that will be used to run different experiments"
-    )
-    parser.add_argument("--log_dir",
-                        nargs="?",
-                        default="logs",
-                        help="A path to a directory, in which the generated"
-                        " data will be stored for later visualization")
-    parser.add_argument(
-        "--log_rewards",
-        action="store_true",
-        help="Write the acquired rewards and successes into the log")
-    parser.add_argument(
-        "--log_buffer",
-        action="store_true",
-        help=
-        "Write the data available for learning in every iteration - needs much more storage"
-    )
-    parser.add_argument("--visualize",
-                        action="store_true",
-                        help="Visualize the learning progress")
-    parser.add_argument(
-        "--algorithm",
-        type=str,
-        nargs="?",
-        default="sprl",
-        choices=["sprl", "cmaes", "creps", "saggriac", "goalgan", "sprl-svgd"],
-        help="The algorithm with which to run the experiment")
-    parser.add_argument(
-        "--svgd_sampler_type",
-        type=str,
-        nargs="?",
-        default="simple",
-        choices=["without", "simple", "prune_old"],
-    )
-
-    args = parser.parse_args()
-
-    environment = environments.get(args.environment,
-                                   cores=args.n_cores,
-                                   svgd_type=args.svgd_sampler_type)
-    if args.setting != "":
-        environment.set_setting(args.setting)
+@hydra.main(config_path='config', config_name='main')
+def hydra_main(cfg: DictConfig) -> None:
+    environment = environments.get(cfg.env.type,
+                                   cores=cfg.experiment.cores,
+                                   svgd_type=cfg.algorithm.sampler_type)
+    if cfg.env.setting != "":
+        environment.set_setting(cfg.env.setting)
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
 
     if rank == 0:
-        print("Running with " + str(size) + " MPI workers!")
+        log.debug("Running with " + str(size) + " MPI workers!")
 
     # Compute the number of experiments to run
-    n_local_exp = int(args.n_experiments /
-                      size) + (1 if rank < args.n_experiments % size else 0)
-    seed_offset = rank * int(args.n_experiments / size) + min(
-        rank, args.n_experiments % size)
+    n_local_exp = int(cfg.experiment.amount /
+                      size) + (1 if rank < cfg.experiment.amount % size else 0)
+    seed_offset = rank * int(cfg.experiment.amount / size) + min(
+        rank, cfg.experiment.amount % size)
     logs = []
     for i in range(0, n_local_exp):
         logs.append(
-            run_experiment(environment, seed_offset + i, args.visualize,
-                           args.algorithm))
+            run_experiment(environment, seed_offset + i,
+                           cfg.experiment.visualize, cfg.algorithm.type, cfg))
 
     # After the experiments, rank 0 collects all the logs into one big list
     if rank == 0:
         for i in range(1, size):
             logs += comm.recv(source=i)
 
-        if len(logs) != args.n_experiments:
+        if len(logs) != cfg.experiment.amount:
             raise RuntimeError(
                 "Something went wrong with distributing the experiments among MPI Workers!"
             )
 
         # Finally, we store the result
         log_file_name = environment.get_name(
-        ) + "-" + args.algorithm + "-" + datetime.datetime.now().isoformat(
+        ) + "-" + cfg.algorithm.type + "-" + datetime.datetime.now().isoformat(
         ) + ".pkl"
-        if not os.path.exists(args.log_dir):
-            os.makedirs(args.log_dir)
 
-        with open(os.path.join(args.log_dir, log_file_name), "wb") as f:
+        with open(os.path.join(os.getcwd(), log_file_name), "wb") as f:
             pickle.dump(logs, f)
     else:
         comm.send(logs, dest=0)
+
+
+if __name__ == "__main__":
+    hydra_main()

@@ -1,0 +1,17 @@
+defaults:
+  - _self_
+  - algorithm: sprl
+  - override hydra/job_logging: custom
+  - override hydra/hydra_logging: colorlog
+
+env:
+  type: gate
+  setting: precision
+
+experiment:
+  cores: 1
+  mpi: 1
+  log_rewards: false
+  log_buffer: false
+  amount: 1
+  visualize: false

@@ -4,6 +4,9 @@ import os
 import numpy.random as rand
 import scipy.optimize as opt
 import scipy.linalg as scpla
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def new_gaussian_pol_eta(weights, features, ys, mus_y, sigma_y, eta, lmbd=1e-10):
@@ -75,7 +78,7 @@ def ensure_kl_divergence(kl, max_kl, max_eta):
                 init_max_eta = np.minimum(max_eta, init_max_eta * 10.)
 
             if abort:
-                print("Could not regularize the problem to satisfaction, will use eta=" + str(max_eta))
+                log.warning(f"Could not regularize the problem to satisfaction, will use eta={max_eta}")
                 eta_opt = max_eta
             else:
                 xtol = 5e-3
@@ -90,12 +93,12 @@ def ensure_kl_divergence(kl, max_kl, max_eta):
         else:
             eta_opt = 0
     except Exception as e:
-        print("Warning! Exception during computation of new distribution, will use eta=" + str(max_eta) + "!")
-        print(e)
+        log.error(f"Warning! Exception during computation of new distribution, will use eta={max_eta}!")
+        log.error(e)
         eta_opt = max_eta
 
     kl_div = kl(eta_opt)
-    print("Eta: " + str(eta_opt), "KL Divergence: " + str(kl_div))
+    log.info(f"Eta: {eta_opt}, KL Divergence: {kl_div}")
 
     return eta_opt
 
