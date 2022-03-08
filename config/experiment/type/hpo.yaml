@@ -9,9 +9,10 @@ hydra:
     ax_config:
       max_trials: 20
       experiment:
-        minimize: true
+        minimize: false
       early_stop:
         max_epochs_without_improvement: 5
+        minimize: false
 
       params:
         algorithm.sampler.old_sample_ratio:

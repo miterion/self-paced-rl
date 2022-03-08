@@ -502,7 +502,11 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
             vis.visualize(spec.n_iter, it_fn)
         else:
             for j in range(0, spec.n_iter):
-                it_fn(j)
+                try:
+                    it_fn(j)
+                except Exception as e:
+                    log.warning(f"Got an exception: {e}")
+                    return [None, 0, 0]
 
         policies.append(copy.deepcopy(policy))
 
@@ -566,11 +570,9 @@ def hydra_main(cfg: DictConfig) -> float:
 
         with open(os.path.join(os.getcwd(), log_file_name), "wb") as f:
             pickle.dump(logs, f)
-        return np.mean(logs[0][2])
+        return np.mean(logs[0][2]).item()
     else:
         comm.send(logs, dest=0)
-
-    return np.mean(logs[2])
 
 if __name__ == "__main__":
     hydra_main()

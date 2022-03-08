@@ -38,7 +38,6 @@ class SteinPointsGaussian(KLGaussian):
         self._samples = values
 
     def prepare_buffer_with_preselected_values(self, values: np.ndarray, num_samples: int, old_sample_ratio: float, stretch_factor: float, aux_samples_factor: float) -> Tuple[np.ndarray, int]:
-        #logging.disable(logging.CRITICAL)
 
         U, S, V = np.linalg.svd(self.sigma)
         sigma_stretched = U * (S * stretch_factor) @ V
