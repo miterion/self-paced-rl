@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - override /hydra/sweeper: ax
+  - override /algorithm: sp
+  - override /hydra/launcher: joblib
+
+hydra:
+  sweeper:
+    ax_config:
+      max_trials: 20
+      experiment:
+        minimize: true
+      early_stop:
+        max_epochs_without_improvement: 5
+
+      params:
+        algorithm.sampler.old_sample_ratio:
+          type: range
+          value_type: float
+          bounds: [0.3, 1.]
+
+        algorithm.sampler.proposal_stretch_factor:
+          type: range
+          value_type: float
+          bounds: [1., 2.]
+        
+        algorithm.sampler.aux_samples_factor:
+          type: range
+          value_type: float
+          bounds: [0.3, 1.3]

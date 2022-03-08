@@ -524,7 +524,7 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
 
 
 @hydra.main(config_path='config', config_name='main')
-def hydra_main(cfg: DictConfig) -> None:
+def hydra_main(cfg: DictConfig) -> float:
     environment = environments.get(cfg.env.type,
                                    cores=cfg.experiment.cores,
                                    svgd_type=cfg.algorithm.sampler_type)
@@ -569,6 +569,7 @@ def hydra_main(cfg: DictConfig) -> None:
     else:
         comm.send(logs, dest=0)
 
+    return np.mean(logs[2])
 
 if __name__ == "__main__":
     hydra_main()

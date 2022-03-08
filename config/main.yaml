@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - algorithm: sprl
+  - experiment/type: run
   - override hydra/job_logging: custom
   - override hydra/hydra_logging: colorlog
 

@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-from multiprocessing import Process, Pipe
+from joblib.externals.loky.backend.context import get_context
 
 
 def worker(remote, parent_remote, cost_fn_constructor, pid):
@@ -31,16 +31,24 @@ def worker(remote, parent_remote, cost_fn_constructor, pid):
 
 
 class AbstractEnvironment:
-
-    def __init__(self, name, n_cores, default_setting, specs, cost_fn_constructor):
+    def __init__(self, name, n_cores, default_setting, specs,
+                 cost_fn_constructor):
         self.name = name
         self.n_cores = n_cores
         self.setting = default_setting
         self.specs = specs
 
-        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(self.n_cores)])
-        self.ps = [Process(target=worker, args=(work_remote, remote, cost_fn_constructor, pid))
-                   for (work_remote, remote, pid) in zip(self.work_remotes, self.remotes, range(0, n_cores))]
+        ctx = get_context("loky")
+
+        self.remotes, self.work_remotes = zip(
+            *[ctx.Pipe() for _ in range(self.n_cores)])
+        self.ps = [
+            ctx.Process(target=worker,
+                        args=(work_remote, remote, cost_fn_constructor, pid))
+            for (
+                work_remote, remote,
+                pid) in zip(self.work_remotes, self.remotes, range(0, n_cores))
+        ]
         for p in self.ps:
             p.daemon = True  # if the main process crashes, we should not cause things to hang
             p.start()
@@ -99,7 +107,8 @@ class AbstractEnvironment:
 
             count = count_new
 
-        for remote, sub_contexts, sub_thetas in zip(self.remotes, contexts, thetas):
+        for remote, sub_contexts, sub_thetas in zip(self.remotes, contexts,
+                                                    thetas):
             remote.send(("experiment", sub_contexts, sub_thetas))
         tmp = [remote.recv() for remote in self.remotes]
 
@@ -134,7 +143,8 @@ class AbstractEnvironment:
                 sub_thetas.append(policy.sample_action(sub_contexts[j, :]))
             thetas.append(np.array(sub_thetas))
 
-        for remote, sub_contexts, sub_thetas in zip(self.remotes, contexts, thetas):
+        for remote, sub_contexts, sub_thetas in zip(self.remotes, contexts,
+                                                    thetas):
             remote.send(("experiment", sub_contexts, sub_thetas))
         tmp = [remote.recv() for remote in self.remotes]
 
@@ -144,4 +154,5 @@ class AbstractEnvironment:
             rewards.append(sub_rewards)
             successes.append(sub_successes)
 
-        return np.concatenate(contexts), np.concatenate(thetas), np.concatenate(rewards), np.concatenate(successes)
+        return np.concatenate(contexts), np.concatenate(
+            thetas), np.concatenate(rewards), np.concatenate(successes)
