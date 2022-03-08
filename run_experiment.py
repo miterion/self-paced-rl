@@ -566,6 +566,7 @@ def hydra_main(cfg: DictConfig) -> float:
 
         with open(os.path.join(os.getcwd(), log_file_name), "wb") as f:
             pickle.dump(logs, f)
+        return np.mean(logs[0][2])
     else:
         comm.send(logs, dest=0)
 
