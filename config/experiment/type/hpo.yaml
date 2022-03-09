@@ -1,7 +1,6 @@
 # @package _global_
 defaults:
   - override /hydra/sweeper: ax
-  - override /algorithm: sp
   - override /hydra/launcher: joblib
 
 hydra:
@@ -14,18 +13,4 @@ hydra:
         max_epochs_without_improvement: 5
         minimize: false
 
-      params:
-        algorithm.sampler.old_sample_ratio:
-          type: range
-          value_type: float
-          bounds: [0.3, 1.]
-
-        algorithm.sampler.proposal_stretch_factor:
-          type: range
-          value_type: float
-          bounds: [1., 2.]
-        
-        algorithm.sampler.aux_samples_factor:
-          type: range
-          value_type: float
-          bounds: [0.3, 1.3]
+      params: ${algorithm.hpo_params}

@@ -1,2 +1,11 @@
 type: sprl
 sampler_type: without
+
+sampler:
+  old_sample_ratio: 0.1
+
+hpo_params:
+  algorithm.sampler.old_sample_ratio:
+    type: range
+    value_type: float
+    bounds: [0.1, 0.9]

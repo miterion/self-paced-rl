@@ -57,11 +57,20 @@ def creps_iteration_function(env, spec, policies, average_rewards,
 
 def sprl_iteration_function(env, spec, policies, average_rewards,
                             average_successes, alg, distribution, buffer, seed,
-                            iteration):
+                            cfg, iteration):
     policies.append(copy.deepcopy(distribution))
 
+    if buffer.current_size == buffer.size:
+        n_removed_samples = int(buffer.current_size * cfg.algorithm.sampler.old_sample_ratio)
+        selection = np.ones(buffer.current_size, dtype=bool)
+        selection[:n_removed_samples] = False
+        buffer.keep_specific_indices(selection)
+        log.debug(f"Removed {n_removed_samples} samples")
+    else:
+        n_removed_samples = spec.n_samples
+    
     contexts, thetas, rewards, successes = env.sample_rewards(
-        spec.n_samples, distribution.policy, distribution.distribution)
+        n_removed_samples, distribution.policy, distribution.distribution)
     buffer.insert(contexts, thetas, rewards, successes)
 
     buffered_contexts, buffered_thetas, buffered_rewards, buffered_successes = buffer.get(
@@ -229,9 +238,19 @@ def gan_policy_rollout(gan, policy, env, spec, success_buffer, lb, ub,
            old_successes
 
 
-def sprl_svgd_iteration_function(env, spec, policies, average_rewards,
-                                 average_successes, alg, distribution, buffer,
-                                 seed, cfg, iteration,):
+def sprl_svgd_iteration_function(
+    env,
+    spec,
+    policies,
+    average_rewards,
+    average_successes,
+    alg,
+    distribution,
+    buffer,
+    seed,
+    cfg,
+    iteration,
+):
     policies.append(copy.deepcopy(distribution))
 
     contexts = buffer.get_specific(0)
@@ -478,7 +497,8 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
                 buffer = SVGD_ExperienceBuffer2(
                     spec.buffer_size * spec.n_samples, 4)
             else:
-                buffer = ExperienceBuffer(spec.buffer_size, 4)
+                buffer = SVGD_ExperienceBuffer2(
+                    spec.buffer_size * spec.n_samples, 4)
             for j in range(0, spec.buffer_size - 1):
                 buffer.insert(
                     *env.sample_rewards(spec.n_samples, policy, distribution))
@@ -494,7 +514,7 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
             else:
                 it_fn = partial(sprl_iteration_function, env, spec, policies,
                                 average_rewards, average_successes, alg,
-                                itl_distribution, buffer, seed)
+                                itl_distribution, buffer, seed, cfg)
 
         # This is the actual main loop
         if visualize:
@@ -573,6 +593,7 @@ def hydra_main(cfg: DictConfig) -> float:
         return np.mean(logs[0][2]).item()
     else:
         comm.send(logs, dest=0)
+
 
 if __name__ == "__main__":
     hydra_main()

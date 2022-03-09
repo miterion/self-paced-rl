@@ -4,3 +4,19 @@ sampler:
   old_sample_ratio: 0.5
   proposal_stretch_factor: 1.5
   aux_samples_factor: 0.9
+
+hpo_params:
+  algorithm.sampler.old_sample_ratio:
+    type: range
+    value_type: float
+    bounds: [0.3, 1.]
+
+  algorithm.sampler.proposal_stretch_factor:
+    type: range
+    value_type: float
+    bounds: [1., 2.]
+  
+  algorithm.sampler.aux_samples_factor:
+    type: range
+    value_type: float
+    bounds: [0.3, 1.3]
