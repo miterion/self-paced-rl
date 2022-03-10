@@ -99,6 +99,8 @@ class SteinPointsIterGaussian(SteinPointsGaussian):
             self, values: np.ndarray, num_samples: int,
             cfg: dict) -> Tuple[np.ndarray, int]:
 
+        added_samples = int(values.shape[0] * cfg.aux_samples_factor)
+        assert num_samples == added_samples
         U, S, V = np.linalg.svd(self.sigma)
         sigma_stretched = U * (S * cfg.proposal_stretch_factor) @ V
         dis = multivariate_normal(self.mu, self.sigma)
@@ -110,7 +112,7 @@ class SteinPointsIterGaussian(SteinPointsGaussian):
             n_samples=num_samples,
             bounds=(self.lower_bounds, self.upper_bounds),
             aux_samples_dist=proposal,
-            aux_samples_amount=int(values.shape[0] * cfg.aux_samples_factor),
+            aux_samples_amount=added_samples,
             return_splitted=True,
             kernel_args=self._kernel_args)
         self._samples = aux.copy()

@@ -61,14 +61,15 @@ def sprl_iteration_function(env, spec, policies, average_rewards,
     policies.append(copy.deepcopy(distribution))
 
     if buffer.current_size == buffer.size:
-        n_removed_samples = int(buffer.current_size * cfg.algorithm.sampler.old_sample_ratio)
+        n_removed_samples = int(buffer.current_size *
+                                cfg.algorithm.sampler.old_sample_ratio)
         selection = np.ones(buffer.current_size, dtype=bool)
         selection[:n_removed_samples] = False
         buffer.keep_specific_indices(selection)
         log.debug(f"Removed {n_removed_samples} samples")
     else:
         n_removed_samples = spec.n_samples
-    
+
     contexts, thetas, rewards, successes = env.sample_rewards(
         n_removed_samples, distribution.policy, distribution.distribution)
     buffer.insert(contexts, thetas, rewards, successes)
@@ -254,22 +255,26 @@ def sprl_svgd_iteration_function(
     policies.append(copy.deepcopy(distribution))
 
     contexts = buffer.get_specific(0)
+    t1 = time.time()
     if cfg.algorithm.sampler_type == 'iterative':
         # We have to manually remove old samples from the buffer
         if buffer.current_size == buffer.size:
-            sample_count = int(buffer.current_size * cfg.algorithm.sampler.old_sample_ratio)
+            sample_count = int(buffer.current_size *
+                               cfg.algorithm.sampler.old_sample_ratio)
             selection = np.ones(buffer.current_size, dtype=bool)
             selection[:sample_count] = False
             buffer.keep_specific_indices(selection)
             log.debug(f"Removed {sample_count} samples")
+            contexts = buffer.get_specific(0)
         else:
             sample_count = spec.n_samples
-
-    t1 = time.time()
-    old_selected, sample_count = distribution.distribution.prepare_buffer_with_preselected_values(
-        contexts,
-        buffer.current_size,
-        cfg=cfg.algorithm.sampler)
+        old_selected, _ = distribution.distribution.prepare_buffer_with_preselected_values(
+            contexts,
+            sample_count,
+            cfg=cfg.algorithm.sampler)
+    else:
+        old_selected, sample_count = distribution.distribution.prepare_buffer_with_preselected_values(
+            contexts, buffer.current_size, cfg=cfg.algorithm.sampler)
     t2 = time.time()
     log.debug(f"Preparing buffer took {t2-t1} seconds.")
     buffer.keep_specific_indices(old_selected)
