@@ -16,3 +16,8 @@ experiment:
   log_buffer: false
   amount: 1
   visualize: false
+
+hydra:
+  job:
+    env_set:
+      PYTHONWARNINGS: ignore
