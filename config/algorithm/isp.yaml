@@ -3,7 +3,7 @@ sampler_type: iterative
 sampler:
   old_sample_ratio: 0.5
   proposal_stretch_factor: 1.5
-  aux_samples_factor: 0.05
+  aux_samples_factor: 0.12
 
 
 hpo_params:
@@ -18,4 +18,4 @@ hpo_params:
   algorithm.sampler.aux_samples_factor:
     type: range
     value_type: float
-    bounds: [0.01, 0.4]
+    bounds: [0.12, 0.5]
