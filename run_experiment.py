@@ -539,8 +539,11 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
                 try:
                     it_fn(j)
                 except Exception as e:
-                    log.warning(f"Got an exception", exc_info=e)
-                    return [None, 0, 0]
+                    if not cfg.experiment.type == 'hpo':
+                        raise e
+                    else:
+                        log.warning(f"Got an exception", exc_info=e)
+                        return [None, 0, 0]
 
         policies.append(copy.deepcopy(policy))
 

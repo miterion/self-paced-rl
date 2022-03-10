@@ -3,6 +3,9 @@ defaults:
   - override /hydra/sweeper: ax
   - override /hydra/launcher: joblib
 
+experiment:
+  type: hpo
+
 hydra:
   sweeper:
     ax_config:
