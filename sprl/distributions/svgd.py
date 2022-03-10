@@ -100,7 +100,7 @@ class SteinPointsIterGaussian(SteinPointsGaussian):
             cfg: dict) -> Tuple[np.ndarray, int]:
 
         added_samples = int(values.shape[0] * cfg.aux_samples_factor)
-        print(added_samples)
+        log.debug(f"Aux samples: {added_samples}, required samples {num_samples}")
         assert num_samples <= added_samples, "Not enough samples for iSP due to low aux_samples_factor"
         U, S, V = np.linalg.svd(self.sigma)
         sigma_stretched = U * (S * cfg.proposal_stretch_factor) @ V
