@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from functools import partial
 from typing import Tuple
 
@@ -13,13 +14,11 @@ from sprl.distributions.kl_joint import KLGaussian, KLJoint, KLPolicy
 
 log = logging.getLogger(__name__)
 
-class SteinPointsGaussian(KLGaussian):
 
+class SteinPointsGaussian(KLGaussian, ABC):
     def __init__(self, lower_bounds, upper_bounds, mu, sigma):
         super().__init__(lower_bounds, upper_bounds, mu, sigma)
         self._samples = None
-        self._sampler = OptimizationSteinPointsSampler(
-            kernel=rbf_kernel_mahalanobis, verbose=False)
         self._kernel_args = dict(bandwidth=1.)
         self._return_last = False
 
@@ -32,32 +31,9 @@ class SteinPointsGaussian(KLGaussian):
             self._return_last = False
             return self._samples
         else:
-            raise NotImplementedError('Called sample without setting return last or clearing sample buffer')
-
-    def set_buffer_values(self, values: np.ndarray):
-        self._samples = values
-
-    def prepare_buffer_with_preselected_values(self, values: np.ndarray, num_samples: int, old_sample_ratio: float, stretch_factor: float, aux_samples_factor: float) -> Tuple[np.ndarray, int]:
-
-        U, S, V = np.linalg.svd(self.sigma)
-        sigma_stretched = U * (S * stretch_factor) @ V
-        dis = multivariate_normal(self.mu, self.sigma)
-        proposal = multivariate_normal(self.mu, sigma_stretched)
-        # aux_samples = proposal.rvs(int(values.shape[0] * 0.3))
-        self._kernel_args["cov"] = np.linalg.inv(sigma_stretched)
-        old_sample_selection, aux = self._sampler.sample_with_bound(
-            new=dis,
-            old_samples=values,
-            n_samples=num_samples,
-            bounds=(self.lower_bounds, self.upper_bounds),
-            aux_samples_dist=proposal,
-            aux_samples_amount=int(values.shape[0] * aux_samples_factor),
-            return_splitted=True,
-            old_sample_ratio=old_sample_ratio,
-            kernel_args=self._kernel_args)
-        #logging.disable(logging.NOTSET)
-        self._samples = aux.copy()
-        return old_sample_selection, aux.shape[0]
+            raise NotImplementedError(
+                'Called sample without setting return last or clearing sample buffer'
+            )
 
     def clear_sample_buffer(self):
         self._samples = None
@@ -69,10 +45,82 @@ class SteinPointsGaussian(KLGaussian):
         del state['_sampler']
         return state
 
+    def set_buffer_values(self, values: np.ndarray):
+        self._samples = values
+
+    @abstractmethod
+    def prepare_buffer_with_preselected_values(
+            self, values: np.ndarray, num_samples: int,
+            cfg: dict) -> Tuple[np.ndarray, int]:
+        pass
+
+
+class SteinPointsOptGaussian(SteinPointsGaussian):
+    def __init__(self, lower_bounds, upper_bounds, mu, sigma):
+        super().__init__(lower_bounds, upper_bounds, mu, sigma)
+        self._sampler = OptimizationSteinPointsSampler(
+            kernel=rbf_kernel_mahalanobis, verbose=False)
+
+    def prepare_buffer_with_preselected_values(
+            self, values: np.ndarray, num_samples: int,
+            cfg: dict) -> Tuple[np.ndarray, int]:
+
+        U, S, V = np.linalg.svd(self.sigma)
+        sigma_stretched = U * (S * cfg.proposal_stretch_factor) @ V
+        dis = multivariate_normal(self.mu, self.sigma)
+        proposal = multivariate_normal(self.mu, sigma_stretched)
+        self._kernel_args["cov"] = np.linalg.inv(sigma_stretched)
+        old_sample_selection, aux = self._sampler.sample_with_bound(
+            new=dis,
+            old_samples=values,
+            n_samples=num_samples,
+            bounds=(self.lower_bounds, self.upper_bounds),
+            aux_samples_dist=proposal,
+            aux_samples_amount=int(values.shape[0] * cfg.aux_samples_factor),
+            return_splitted=True,
+            old_sample_ratio=cfg.old_sample_ratio,
+            kernel_args=self._kernel_args)
+        self._samples = aux.copy()
+        return old_sample_selection, aux.shape[0]
+
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._sampler = OptimizationSteinPointsSampler(
             kernel=rbf_kernel_mahalanobis, verbose=False)
+
+
+class SteinPointsIterGaussian(SteinPointsGaussian):
+    def __init__(self, lower_bounds, upper_bounds, mu, sigma):
+        super().__init__(lower_bounds, upper_bounds, mu, sigma)
+        self._sampler = SteinPointsSampler(kernel=rbf_kernel_mahalanobis,
+                                           verbose=False)
+
+    def prepare_buffer_with_preselected_values(
+            self, values: np.ndarray, num_samples: int,
+            cfg: dict) -> Tuple[np.ndarray, int]:
+
+        U, S, V = np.linalg.svd(self.sigma)
+        sigma_stretched = U * (S * cfg.proposal_stretch_factor) @ V
+        dis = multivariate_normal(self.mu, self.sigma)
+        proposal = multivariate_normal(self.mu, sigma_stretched)
+        self._kernel_args["cov"] = np.linalg.inv(sigma_stretched)
+        old_sample_selection, aux = self._sampler.sample_with_bound(
+            new=dis,
+            old_samples=values,
+            n_samples=num_samples,
+            bounds=(self.lower_bounds, self.upper_bounds),
+            aux_samples_dist=proposal,
+            aux_samples_amount=int(values.shape[0] * cfg.aux_samples_factor),
+            return_splitted=True,
+            kernel_args=self._kernel_args)
+        self._samples = aux.copy()
+        return old_sample_selection, aux.shape[0]
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._sampler = SteinPointsSampler(kernel=rbf_kernel_mahalanobis,
+                                           verbose=False)
+
 
 class SVGDKLPolicy(KLPolicy):
     def __init__(self, lower_bounds, upper_bounds, mu_init, sigma_init,
@@ -136,13 +184,13 @@ class SVGDJoint(KLJoint):
                  svgd_type=None):
 
         log.debug(f"Using sampler type: {svgd_type}")
-        if svgd_type == 'prune_old':
-            self.distribution = SVGDPruningKLGaussian(lower_bounds_x,
-                                                      upper_bounds_x, mu_x,
-                                                      sigma_x)
-        elif svgd_type == 'simple':
-            self.distribution = SteinPointsGaussian(lower_bounds_x, upper_bounds_x,
-                                               mu_x, sigma_x)
+        if svgd_type == 'iterative':
+            self.distribution = SteinPointsIterGaussian(
+                lower_bounds_x, upper_bounds_x, mu_x, sigma_x)
+        elif svgd_type == 'optimization':
+            self.distribution = SteinPointsOptGaussian(lower_bounds_x,
+                                                       upper_bounds_x, mu_x,
+                                                       sigma_x)
         else:
             self.distribution = KLGaussian(lower_bounds_x, upper_bounds_x,
                                            mu_x, sigma_x)
@@ -151,14 +199,3 @@ class SVGDJoint(KLJoint):
 
         self.epsilon = epsilon
         self.max_eta = max_eta
-
-
-class SVGDPruningKLGaussian(SteinPointsGaussian):
-    def __init__(self, lower_bounds, upper_bounds, mu, sigma, prune_amount=10):
-        super().__init__(lower_bounds, upper_bounds, mu, sigma)
-        self._prune_amount = prune_amount
-
-    def sample(self, num_samples=1):
-        if self._samples is not None:
-            self._samples = self._samples[self._prune_amount:]
-        return super().sample(num_samples=num_samples)

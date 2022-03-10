@@ -254,13 +254,22 @@ def sprl_svgd_iteration_function(
     policies.append(copy.deepcopy(distribution))
 
     contexts = buffer.get_specific(0)
+    if cfg.algorithm.sampler_type == 'iterative':
+        # We have to manually remove old samples from the buffer
+        if buffer.current_size == buffer.size:
+            sample_count = int(buffer.current_size * cfg.algorithm.sampler.old_sample_ratio)
+            selection = np.ones(buffer.current_size, dtype=bool)
+            selection[:sample_count] = False
+            buffer.keep_specific_indices(selection)
+            log.debug(f"Removed {sample_count} samples")
+        else:
+            sample_count = spec.n_samples
+
     t1 = time.time()
     old_selected, sample_count = distribution.distribution.prepare_buffer_with_preselected_values(
         contexts,
         buffer.current_size,
-        old_sample_ratio=cfg.algorithm.sampler.old_sample_ratio,
-        stretch_factor=cfg.algorithm.sampler.proposal_stretch_factor,
-        aux_samples_factor=cfg.algorithm.sampler.aux_samples_factor)
+        cfg=cfg.algorithm.sampler)
     t2 = time.time()
     log.debug(f"Preparing buffer took {t2-t1} seconds.")
     buffer.keep_specific_indices(old_selected)
@@ -525,7 +534,7 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
                 try:
                     it_fn(j)
                 except Exception as e:
-                    log.warning(f"Got an exception: {e}")
+                    log.warning(f"Got an exception", exc_info=e)
                     return [None, 0, 0]
 
         policies.append(copy.deepcopy(policy))
