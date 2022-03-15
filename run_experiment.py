@@ -68,7 +68,7 @@ def sprl_iteration_function(env, spec, policies, average_rewards,
         buffer.keep_specific_indices(selection)
         log.debug(f"Removed {n_removed_samples} samples")
     else:
-        n_removed_samples = spec.n_samples
+        n_removed_samples = cfg.env.n_samples
 
     contexts, thetas, rewards, successes = env.sample_rewards(
         n_removed_samples, distribution.policy, distribution.distribution)
@@ -267,7 +267,7 @@ def sprl_svgd_iteration_function(
             log.debug(f"Removed {sample_count} samples")
             contexts = buffer.get_specific(0)
         else:
-            sample_count = spec.n_samples
+            sample_count = cfg.env.n_samples
         old_selected, _ = distribution.distribution.prepare_buffer_with_preselected_values(
             contexts,
             sample_count,
@@ -471,11 +471,11 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
 
             # Create the initial experience
             for j in range(0, spec.buffer_size - 1):
-                contexts = np.array(sr.sample_states(spec.n_samples))
+                contexts = np.array(sr.sample_states(cfg.env.n_samples))
 
                 thetas = np.array([
                     policy.sample_action(contexts[k, :])
-                    for k in range(0, spec.n_samples)
+                    for k in range(0, cfg.env.n_samples)
                 ])
                 rewards, successes = env.evaluate(contexts, thetas)
 
@@ -488,7 +488,7 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
         else:
             if algorithm == "creps":
                 feature_mean = np.mean(spec.value_features(
-                    spec.target_dist.sample(n_samples=10 * spec.n_samples)),
+                    spec.target_dist.sample(n_samples=10 * cfg.env.n_samples)),
                                        axis=0)
                 alg = CREPS(spec.value_features, feature_mean,
                             spec.regularizer)
@@ -509,13 +509,13 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
             if algorithm == "sprl-svgd":
                 # TODO: Reevaluate heuristic here
                 buffer = SVGD_ExperienceBuffer2(
-                    spec.buffer_size * spec.n_samples, 4)
+                    spec.buffer_size * cfg.env.n_samples, 4)
             else:
                 buffer = SVGD_ExperienceBuffer2(
-                    spec.buffer_size * spec.n_samples, 4)
+                    spec.buffer_size * cfg.env.n_samples, 4)
             for j in range(0, spec.buffer_size - 1):
-                buffer.insert(
-                    *env.sample_rewards(spec.n_samples, policy, distribution))
+                buffer.insert(*env.sample_rewards(cfg.env.n_samples, policy,
+                                                  distribution))
 
             if algorithm == "creps":
                 it_fn = partial(creps_iteration_function, env, spec, policies,
@@ -549,7 +549,7 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
 
         t_end = time.time()
 
-        __, __, rewards, successes = env.sample_rewards(spec.n_samples, policy)
+        __, __, rewards, successes = env.sample_rewards(cfg.env.n_samples, policy)
         log.info(
             "Seed: %d, Final Reward: %4.2f, Final Success Rate: %1.2f, Training Time: %.2E"
             % (seed, np.mean(rewards), np.mean(successes), t_end - t_start))

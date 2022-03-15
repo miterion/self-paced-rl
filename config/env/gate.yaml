@@ -1,0 +1,3 @@
+type: gate
+setting: precision
+n_samples: 50
