@@ -13,6 +13,7 @@ experiment:
   log_buffer: false
   amount: 1
   visualize: false
+  output: standard
 
 hydra:
   job:
