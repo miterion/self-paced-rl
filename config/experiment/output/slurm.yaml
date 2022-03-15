@@ -3,3 +3,5 @@
 hydra:
   run:
     dir: outputs/${now:%Y-%m-%d}/${hydra.job.id}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${hydra.job.id}
