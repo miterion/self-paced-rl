@@ -29,6 +29,8 @@ from sprl.util.experiencebuffer import (ExperienceBuffer,
                                         SVGD_ExperienceBuffer2)
 from sprl.util.visualization import Visualization
 
+from adaptive_baselines.samplers.util import calculate_ksd_with_mahalanobis_kernel
+
 log = logging.getLogger(__name__)
 
 
@@ -61,12 +63,15 @@ def sprl_iteration_function(env, spec, policies, average_rewards,
     policies.append(copy.deepcopy(distribution))
 
     if buffer.current_size == buffer.size:
-        n_removed_samples = int(buffer.current_size *
-                                cfg.algorithm.sampler.old_sample_ratio)
+        if cfg.algorithm.sampler.old_sample_ratio == 0:
+            n_removed_samples = cfg.env.n_samples
+        else:
+            n_removed_samples = int(buffer.current_size *
+                                    cfg.algorithm.sampler.old_sample_ratio)
         selection = np.ones(buffer.current_size, dtype=bool)
         selection[:n_removed_samples] = False
         buffer.keep_specific_indices(selection)
-        log.debug(f"Removed {n_removed_samples} samples")
+        log.info(f"Removed {n_removed_samples} samples")
     else:
         n_removed_samples = cfg.env.n_samples
 
@@ -76,6 +81,15 @@ def sprl_iteration_function(env, spec, policies, average_rewards,
 
     buffered_contexts, buffered_thetas, buffered_rewards, buffered_successes = buffer.get(
     )
+
+    if cfg.experiment.log_ksd:
+        mean, cov = distribution.distribution.get_moments()
+        ksd = calculate_ksd_with_mahalanobis_kernel(
+            buffered_contexts, multivariate_normal(mean, cov))
+        log.info(f"Context KSD: {ksd}")
+    with open(os.path.join(os.getcwd(), "ksd"), "a") as f:
+        f.write(f"{ksd.item()}\n")
+
     average_rewards.append(np.mean(buffered_rewards))
     average_successes.append(np.mean(buffered_successes))
 
@@ -259,22 +273,23 @@ def sprl_svgd_iteration_function(
     if cfg.algorithm.sampler_type == 'iterative':
         # We have to manually remove old samples from the buffer
         if buffer.current_size == buffer.size:
-            sample_count = int(buffer.current_size *
-                               cfg.algorithm.sampler.old_sample_ratio)
+            if cfg.algorithm.sampler.old_sample_ratio == 0:
+                sample_count = cfg.env.n_samples
+            else:
+                sample_count = int(buffer.current_size *
+                                        cfg.algorithm.sampler.old_sample_ratio)
             selection = np.ones(buffer.current_size, dtype=bool)
             selection[:sample_count] = False
             buffer.keep_specific_indices(selection)
-            log.debug(f"Removed {sample_count} samples")
+            log.info(f"Removed {sample_count} samples")
             contexts = buffer.get_specific(0)
         else:
             sample_count = cfg.env.n_samples
         old_selected, _ = distribution.distribution.prepare_buffer_with_preselected_values(
-            contexts,
-            sample_count,
-            cfg=cfg.algorithm.sampler)
+            contexts, sample_count, cfg=cfg.algorithm.sampler)
     else:
         old_selected, sample_count = distribution.distribution.prepare_buffer_with_preselected_values(
-            contexts, buffer.current_size, cfg=cfg.algorithm.sampler)
+            contexts, buffer.size, cfg=cfg)
     t2 = time.time()
     log.debug(f"Preparing buffer took {t2-t1} seconds.")
     buffer.keep_specific_indices(old_selected)
@@ -287,6 +302,15 @@ def sprl_svgd_iteration_function(
 
     buffered_contexts, buffered_thetas, buffered_rewards, buffered_successes = buffer.get(
     )
+
+    if cfg.experiment.log_ksd:
+        mean, cov = distribution.distribution.get_moments()
+        ksd = calculate_ksd_with_mahalanobis_kernel(
+            buffered_contexts, multivariate_normal(mean, cov))
+        log.info(f"Context KSD: {ksd}")
+        with open(os.path.join(os.getcwd(), "ksd"), "a") as f:
+            f.write(f"{ksd.item()}\n")
+
     average_rewards.append(np.mean(buffered_rewards))
     average_successes.append(np.mean(buffered_successes))
 
@@ -549,7 +573,8 @@ def run_experiment(env, seed, visualize, algorithm, cfg: DictConfig):
 
         t_end = time.time()
 
-        __, __, rewards, successes = env.sample_rewards(cfg.env.n_samples, policy)
+        __, __, rewards, successes = env.sample_rewards(
+            cfg.env.n_samples, policy)
         log.info(
             "Seed: %d, Final Reward: %4.2f, Final Success Rate: %1.2f, Training Time: %.2E"
             % (seed, np.mean(rewards), np.mean(successes), t_end - t_start))

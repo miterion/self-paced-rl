@@ -1,5 +1,4 @@
 import logging
-from abc import ABC, abstractmethod
 from functools import partial
 from typing import Tuple
 
@@ -15,7 +14,7 @@ from sprl.distributions.kl_joint import KLGaussian, KLJoint, KLPolicy
 log = logging.getLogger(__name__)
 
 
-class SteinPointsGaussian(KLGaussian, ABC):
+class SteinPointsGaussian(KLGaussian):
     def __init__(self, lower_bounds, upper_bounds, mu, sigma):
         super().__init__(lower_bounds, upper_bounds, mu, sigma)
         self._samples = None
@@ -48,7 +47,6 @@ class SteinPointsGaussian(KLGaussian, ABC):
     def set_buffer_values(self, values: np.ndarray):
         self._samples = values
 
-    @abstractmethod
     def prepare_buffer_with_preselected_values(
             self, values: np.ndarray, num_samples: int,
             cfg: dict) -> Tuple[np.ndarray, int]:
@@ -66,19 +64,28 @@ class SteinPointsOptGaussian(SteinPointsGaussian):
             cfg: dict) -> Tuple[np.ndarray, int]:
 
         U, S, V = np.linalg.svd(self.sigma)
-        sigma_stretched = U * (S * cfg.proposal_stretch_factor) @ V
+        sigma_stretched = U * (
+            S * cfg.algorithm.sampler.proposal_stretch_factor) @ V
         dis = multivariate_normal(self.mu, self.sigma)
         proposal = multivariate_normal(self.mu, sigma_stretched)
         self._kernel_args["cov"] = np.linalg.inv(sigma_stretched)
+        if cfg.algorithm.sampler.old_sample_ratio == 0.:
+            if num_samples > values.shape[0]:
+                old_sample_ratio = 1.
+            else:
+                old_sample_ratio = (values.shape[0] - cfg.env.n_samples) / values.shape[0]
+        else:
+            old_sample_ratio = cfg.algorithm.sampler.old_sample_ratio
         old_sample_selection, aux = self._sampler.sample_with_bound(
             new=dis,
             old_samples=values,
             n_samples=num_samples,
             bounds=(self.lower_bounds, self.upper_bounds),
             aux_samples_dist=proposal,
-            aux_samples_amount=int(values.shape[0] * cfg.aux_samples_factor),
+            aux_samples_amount=int(values.shape[0] *
+                                   cfg.algorithm.sampler.aux_samples_factor),
             return_splitted=True,
-            old_sample_ratio=cfg.old_sample_ratio,
+            old_sample_ratio=old_sample_ratio,
             kernel_args=self._kernel_args)
         self._samples = aux.copy()
         return old_sample_selection, aux.shape[0]

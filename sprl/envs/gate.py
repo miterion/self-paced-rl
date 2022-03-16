@@ -82,7 +82,7 @@ class Gate(AbstractEnvironment):
         var = np.diag(np.square(dist))
 
         s3 = ExperimentSpec(
-            n_iter=350,
+            n_iter=5,
             init_dist=SVGDJoint(np.array([-5, 0.1]),
                                 np.array([5, 0.5]),
                                 np.array([0, 0.25]),
